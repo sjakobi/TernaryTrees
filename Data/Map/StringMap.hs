@@ -18,6 +18,7 @@ module Data.Map.StringMap (
 import Data.Map.StringMap.Internal
 import Data.Bits
 import Data.Binary
+import qualified Data.Serialize as Serialize
 import Control.Monad
 import Control.Arrow (first)
 import Prelude hiding (null,lookup)
@@ -47,7 +48,7 @@ insert xss@(x:xs) v (Node ele l e h) =
 
 -- | Inserts a new value into the tree with a given function that combines the new value
 -- and the old value together to for a new entry.
--- 
+--
 -- > insertWith f key newval (fromList [(notkey,val1),(key,oldval)]) == fromList [(notkey,val1),(key,f newval oldval)]
 insertWith ::(v -> v -> v) -> String -> v -> StringMap v -> StringMap v
 insertWith _ xss@(_:_)  v End              = singleton xss v
@@ -64,7 +65,7 @@ insertWith f xss@(x:xs) v (Node ele l e h) =
 
 -- | Inserts a new value into the tree with a given function that combines the new value
 -- and the old value together to for a new entry.
--- 
+--
 -- > insertWithKey f key newval (fromList [(notkey,val1),(key,oldval)]) == fromList [(notkey,val1),(key,f key newval oldval)]
 insertWithKey :: (String -> v -> v -> v) -> String -> v -> StringMap v -> StringMap v
 insertWithKey f ks v m = insertWith (f ks) ks v m
@@ -74,7 +75,7 @@ member         _   End             = False
 member         [] (Null _ _)       = True
 member         [] (Node _ l _ _)   = member [] l
 member xss@(_:_)  (Null _ rest)    = member xss rest
-member xss@(x:xs) (Node ele l e h) = 
+member xss@(x:xs) (Node ele l e h) =
     case compare x ele of
         LT -> member xss l
         EQ -> member  xs e
@@ -222,3 +223,64 @@ instance Binary v => Binary (StringMap v) where
             9 -> liftM2 Null get get
             10 -> return End
             _ -> error ("Invalid data in binary stream. tag: " ++ show tag)
+
+instance Serialize.Serialize v => Serialize.Serialize (StringMap v) where
+  put (Node ch End End End) = do
+    Serialize.putWord8 0
+    Serialize.put ch
+  put (Node ch End End h) = do
+    Serialize.putWord8 1
+    Serialize.put ch
+    Serialize.put h
+  put (Node ch End e End) = do
+    Serialize.putWord8 2
+    Serialize.put ch
+    Serialize.put e
+  put (Node ch End e h) = do
+    Serialize.putWord8 3
+    Serialize.put ch
+    Serialize.put e
+    Serialize.put h
+  put (Node ch l End End) = do
+    Serialize.putWord8 4
+    Serialize.put ch
+    Serialize.put l
+  put (Node ch l End h) = do
+    Serialize.putWord8 5
+    Serialize.put ch
+    Serialize.put l
+    Serialize.put h
+  put (Node ch l e End) = do
+    Serialize.putWord8 6
+    Serialize.put ch
+    Serialize.put l
+    Serialize.put e
+  -- General case
+  put (Node ch l e h) = do
+    Serialize.putWord8 7
+    Serialize.put ch
+    Serialize.put l
+    Serialize.put e
+    Serialize.put h
+  put (Null v End) = do
+    Serialize.putWord8 8
+    Serialize.put v
+  put (Null v rest) = do
+    Serialize.putWord8 9
+    Serialize.put v
+    Serialize.put rest
+  put End = Serialize.putWord8 10
+
+  get = do
+    tag <- Serialize.getWord8
+    case tag of
+      _ | tag < 8 -> do
+        ch <- Serialize.get
+        l <- if tag `testBit` 2 then Serialize.get else return End
+        e <- if tag `testBit` 1 then Serialize.get else return End
+        h <- if tag `testBit` 0 then Serialize.get else return End
+        return (Node ch l e h)
+      8 -> liftM (flip Null End) Serialize.get
+      9 -> liftM2 Null Serialize.get Serialize.get
+      10 -> return End
+      _ -> error ("Invalid data in binary stream. tag: " ++ show tag)
