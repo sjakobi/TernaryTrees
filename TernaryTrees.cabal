@@ -32,21 +32,16 @@ Author:                 Alex Mason
 Maintainer:             Alex Mason (irc: Axman6) <axman6@gmail.com>
 build-type:             Simple
 Cabal-Version:          >= 1.18
-Extra-Source-Files:
-        Data/Map/TernaryMap.hs
-        Data/Map/StringMap.hs
-        Data/Set/TernarySet.hs
-        Data/Set/StringSet.hs
-        Data/Set/StringSet/Internal.hs
-        Data/Set/TernarySet/Internal.hs
-        Data/Map/TernaryMap/Internal.hs
 
 Library
         Build-Depends:
                 base >= 4.0.0.0, base < 5.0.0.0, binary >= 0.5.0.0, cereal
                ,binary-serialise-cbor
         Exposed-modules:
-                Data.Set.TernarySet, Data.Set.StringSet, Data.Map.TernaryMap, Data.Map.StringMap
+                Data.Set.TernarySet, Data.Set.StringSet, Data.Map.TernaryMap, Data.Map.StringMap,
+                Data.Set.StringSet.Internal,
+                Data.Set.TernarySet.Internal,
+                Data.Map.TernaryMap.Internal
         Default-Language: Haskell2010
 
 
