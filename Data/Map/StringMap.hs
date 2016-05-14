@@ -23,6 +23,7 @@ import qualified Data.Binary.Serialise.CBOR as CBOR
 import qualified Data.Binary.Serialise.CBOR.Encoding as CBOR
 import qualified Data.Binary.Serialise.CBOR.Decoding as CBOR
 import qualified Data.Serialize as Serialize
+import Data.List (genericLength)
 import Data.Monoid
 import Control.Monad
 import Control.Arrow (first)
@@ -291,28 +292,19 @@ instance Serialize.Serialize v => Serialize.Serialize (StringMap v) where
       _ -> error ("Invalid data in binary stream. tag: " ++ show tag)
 
 instance Serialise a => Serialise (StringMap a) where
-  encode (Node ch End End End) =
-    CBOR.encodeListLen 1 <> CBOR.encode ch
-  encode (Node ch End End h) =
-    CBOR.encodeListLen 3 <> CBOR.encodeWord 1 <> CBOR.encode ch <> CBOR.encode h
-  encode (Node ch End e End) =
-    CBOR.encodeListLen 3 <> CBOR.encodeWord 2 <> CBOR.encode ch <> CBOR.encode e
-  encode (Node ch End e h) =
-    CBOR.encodeListLen 4 <> CBOR.encodeWord 3 <> CBOR.encode ch <> CBOR.encode e <> CBOR.encode h
-  encode (Node ch l End End) =
-    CBOR.encodeListLen 3 <> CBOR.encodeWord 4 <> CBOR.encode ch <> CBOR.encode l
-  encode (Node ch l End h) =
-    CBOR.encodeListLen 4 <> CBOR.encodeWord 5 <> CBOR.encode ch <> CBOR.encode l <> CBOR.encode h
-  encode (Node ch l e End) =
-    CBOR.encodeListLen 4 <> CBOR.encodeWord 6 <> CBOR.encode ch <> CBOR.encode l <> CBOR.encode e
-  encode (Node ch l e h) =
-    CBOR.encodeListLen 5 <> CBOR.encodeWord 7 <> CBOR.encode ch <> CBOR.encode l <> CBOR.encode e <> CBOR.encode h
+  encode (Node ch End End End) = CBOR.encodeListLen 1 <> CBOR.encode ch
+  encode (Node ch End End h) = encodeTaggedNode 1 ch [h]
+  encode (Node ch End e End) = encodeTaggedNode 2 ch [e]
+  encode (Node ch End e h) = encodeTaggedNode 3 ch [e, h]
+  encode (Node ch l End End) = encodeTaggedNode 4 ch [l]
+  encode (Node ch l End h) = encodeTaggedNode 5 ch [l, h]
+  encode (Node ch l e End) = encodeTaggedNode 6 ch [l, e]
+  encode (Node ch l e h) = encodeTaggedNode 7 ch [l, e, h]
   encode (Null v End) =
     CBOR.encodeListLen 2 <> CBOR.encodeWord 8 <> CBOR.encode v
   encode (Null v rest) =
     CBOR.encodeListLen 3 <> CBOR.encodeWord 9 <> CBOR.encode v <> CBOR.encode rest
-  encode End =
-    CBOR.encodeListLen 0
+  encode End = CBOR.encodeListLen 0
 
   decode = do
     let failBadTag tag len =
@@ -329,42 +321,31 @@ instance Serialise a => Serialise (StringMap a) where
         return (Null v End)
       len@3 -> do
         x <- CBOR.decodeWord
-        case x of
-          1 -> do
-            ch <- CBOR.decode
-            h <- CBOR.decode
-            return (Node ch End End h)
-          2 -> do
-            ch <- CBOR.decode
-            e <- CBOR.decode
-            return (Node ch End e End)
-          4 -> do
-            ch <- CBOR.decode
-            l <- CBOR.decode
-            return (Node ch l End End)
-          9 -> do
-            v <- CBOR.decode
-            rest <- CBOR.decode
-            return (Null v rest)
-          t -> failBadTag t len
+        if x < 9
+           then do
+             ch <- CBOR.decode
+             m <- CBOR.decode
+             case x of
+               1 -> return (Node ch End End m)
+               2 -> return (Node ch End m End)
+               4 -> return (Node ch m End End)
+               t -> failBadTag t len
+           else do
+             case x of
+               9 -> do
+                 v <- CBOR.decode
+                 rest <- CBOR.decode
+                 return (Null v rest)
+               t -> failBadTag t len
       len@4 -> do
         x <- CBOR.decodeWord
+        ch <- CBOR.decode
+        m <- CBOR.decode
+        n <- CBOR.decode
         case x of
-          3 -> do
-            ch <- CBOR.decode
-            e <- CBOR.decode
-            h <- CBOR.decode
-            return (Node ch End e h)
-          5 -> do
-            ch <- CBOR.decode
-            l <- CBOR.decode
-            h <- CBOR.decode
-            return (Node ch l End h)
-          6 -> do
-            ch <- CBOR.decode
-            l <- CBOR.decode
-            e <- CBOR.decode
-            return (Node ch l e End)
+          3 -> return (Node ch End m n)
+          5 -> return (Node ch m End n)
+          6 -> return (Node ch m n End)
           t -> failBadTag t len
       len@5 -> do
         CBOR.decodeWordOf 7
@@ -373,3 +354,8 @@ instance Serialise a => Serialise (StringMap a) where
         e <- CBOR.decode
         h <- CBOR.decode
         return (Node ch l e h)
+
+encodeTaggedNode :: Serialise a => Word -> Char -> [StringMap a] -> CBOR.Encoding
+encodeTaggedNode tag ch ms =
+    CBOR.encodeListLen listLen <> CBOR.encode tag <> CBOR.encode ch <> foldMap CBOR.encode ms
+  where listLen = 2 + genericLength ms
