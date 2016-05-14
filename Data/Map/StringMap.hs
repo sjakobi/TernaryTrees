@@ -18,7 +18,12 @@ module Data.Map.StringMap (
 import Data.Map.StringMap.Internal
 import Data.Bits
 import Data.Binary
+import Data.Binary.Serialise.CBOR (Serialise)
+import qualified Data.Binary.Serialise.CBOR as CBOR
+import qualified Data.Binary.Serialise.CBOR.Encoding as CBOR
+import qualified Data.Binary.Serialise.CBOR.Decoding as CBOR
 import qualified Data.Serialize as Serialize
+import Data.Monoid
 import Control.Monad
 import Control.Arrow (first)
 import Prelude hiding (null,lookup)
@@ -284,3 +289,90 @@ instance Serialize.Serialize v => Serialize.Serialize (StringMap v) where
       9 -> liftM2 Null Serialize.get Serialize.get
       10 -> return End
       _ -> error ("Invalid data in binary stream. tag: " ++ show tag)
+
+instance Serialise a => Serialise (StringMap a) where
+  encode (Node ch End End End) =
+    CBOR.encodeListLen 2 <> CBOR.encodeWord 0 <> CBOR.encode ch
+  encode (Node ch End End h) =
+    CBOR.encodeListLen 3 <> CBOR.encodeWord 1 <> CBOR.encode ch <> CBOR.encode h
+  encode (Node ch End e End) =
+    CBOR.encodeListLen 3 <> CBOR.encodeWord 2 <> CBOR.encode ch <> CBOR.encode e
+  encode (Node ch End e h) =
+    CBOR.encodeListLen 4 <> CBOR.encodeWord 3 <> CBOR.encode ch <> CBOR.encode e <> CBOR.encode h
+  encode (Node ch l End End) =
+    CBOR.encodeListLen 3 <> CBOR.encodeWord 4 <> CBOR.encode ch <> CBOR.encode l
+  encode (Node ch l End h) =
+    CBOR.encodeListLen 4 <> CBOR.encodeWord 5 <> CBOR.encode ch <> CBOR.encode l <> CBOR.encode h
+  encode (Node ch l e End) =
+    CBOR.encodeListLen 4 <> CBOR.encodeWord 6 <> CBOR.encode ch <> CBOR.encode l <> CBOR.encode e
+  encode (Node ch l e h) =
+    CBOR.encodeListLen 5 <> CBOR.encodeWord 7 <> CBOR.encode ch <> CBOR.encode l <> CBOR.encode e <> CBOR.encode h
+  encode (Null v End) =
+    CBOR.encodeListLen 2 <> CBOR.encodeWord 8 <> CBOR.encode v
+  encode (Null v rest) =
+    CBOR.encodeListLen 3 <> CBOR.encodeWord 9 <> CBOR.encode v <> CBOR.encode rest
+  encode End =
+    CBOR.encodeListLen 0
+
+  decode = do
+    let failBadTag tag len =
+          fail ("unknown tag " ++ show tag ++ " for list of length " ++ show len)
+    n <- CBOR.decodeListLen
+    case n of
+      0 -> return End
+      len@2 -> do
+        x <- CBOR.decodeWord
+        case x of
+          0 -> do
+            ch <- CBOR.decode
+            return (Node ch End End End)
+          8 -> do
+            v <- CBOR.decode
+            return (Null v End)
+          t -> failBadTag t len
+      len@3 -> do
+        x <- CBOR.decodeWord
+        case x of
+          1 -> do
+            ch <- CBOR.decode
+            h <- CBOR.decode
+            return (Node ch End End h)
+          2 -> do
+            ch <- CBOR.decode
+            e <- CBOR.decode
+            return (Node ch End e End)
+          4 -> do
+            ch <- CBOR.decode
+            l <- CBOR.decode
+            return (Node ch l End End)
+          9 -> do
+            v <- CBOR.decode
+            rest <- CBOR.decode
+            return (Null v rest)
+          t -> failBadTag t len
+      len@4 -> do
+        x <- CBOR.decodeWord
+        case x of
+          3 -> do
+            ch <- CBOR.decode
+            e <- CBOR.decode
+            h <- CBOR.decode
+            return (Node ch End e h)
+          5 -> do
+            ch <- CBOR.decode
+            l <- CBOR.decode
+            h <- CBOR.decode
+            return (Node ch l End h)
+          6 -> do
+            ch <- CBOR.decode
+            l <- CBOR.decode
+            e <- CBOR.decode
+            return (Node ch l e End)
+          t -> failBadTag t len
+      len@5 -> do
+        CBOR.decodeWordOf 7
+        ch <- CBOR.decode
+        l <- CBOR.decode
+        e <- CBOR.decode
+        h <- CBOR.decode
+        return (Node ch l e h)

@@ -31,7 +31,7 @@ License-file:           LICENSE.txt
 Author:                 Alex Mason
 Maintainer:             Alex Mason (irc: Axman6) <axman6@gmail.com>
 build-type:             Simple
-Cabal-Version:          >= 1.2
+Cabal-Version:          >= 1.18
 Extra-Source-Files:
         Data/Map/TernaryMap.hs
         Data/Map/StringMap.hs
@@ -43,13 +43,19 @@ Extra-Source-Files:
 
 Library
         Build-Depends:
-                base >= 4.0.0.0, base < 5.0.0.0, binary >= 0.5.0.0
+                base >= 4.0.0.0, base < 5.0.0.0, binary >= 0.5.0.0, cereal
+               ,binary-serialise-cbor
         Exposed-modules:
                 Data.Set.TernarySet, Data.Set.StringSet, Data.Map.TernaryMap, Data.Map.StringMap
+        Default-Language: Haskell2010
+
 
 Executable tdict
   Main-Is:        Main.hs
   Build-Depends:  base
+                 ,binary
+                 ,TernaryTrees
+  Default-Language: Haskell2010
 
 Test-suite spec
   Type: exitcode-stdio-1.0
@@ -58,4 +64,9 @@ Test-suite spec
                 ,hspec
                 ,hspec-smallcheck
                 ,smallcheck
+                ,base
+                ,TernaryTrees
+                ,binary
+                ,binary-serialise-cbor
   Ghc-Options: -threaded -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
+  Default-Language: Haskell2010
