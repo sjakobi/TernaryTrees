@@ -55,5 +55,6 @@ Test-suite spec
                 ,TernaryTrees
                 ,binary
                 ,binary-serialise-cbor
+                ,QuickCheck
   Ghc-Options: -threaded -Wall -fwarn-tabs -fwarn-incomplete-uni-patterns -fwarn-incomplete-record-updates
   Default-Language: Haskell2010

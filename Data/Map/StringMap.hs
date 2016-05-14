@@ -292,7 +292,7 @@ instance Serialize.Serialize v => Serialize.Serialize (StringMap v) where
 
 instance Serialise a => Serialise (StringMap a) where
   encode (Node ch End End End) =
-    CBOR.encodeListLen 2 <> CBOR.encodeWord 0 <> CBOR.encode ch
+    CBOR.encodeListLen 1 <> CBOR.encode ch
   encode (Node ch End End h) =
     CBOR.encodeListLen 3 <> CBOR.encodeWord 1 <> CBOR.encode ch <> CBOR.encode h
   encode (Node ch End e End) =
@@ -320,16 +320,13 @@ instance Serialise a => Serialise (StringMap a) where
     n <- CBOR.decodeListLen
     case n of
       0 -> return End
+      1 -> do
+        ch <- CBOR.decode
+        return (Node ch End End End)
       len@2 -> do
-        x <- CBOR.decodeWord
-        case x of
-          0 -> do
-            ch <- CBOR.decode
-            return (Node ch End End End)
-          8 -> do
-            v <- CBOR.decode
-            return (Null v End)
-          t -> failBadTag t len
+        CBOR.decodeWordOf 8
+        v <- CBOR.decode
+        return (Null v End)
       len@3 -> do
         x <- CBOR.decodeWord
         case x of
