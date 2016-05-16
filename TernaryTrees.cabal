@@ -38,10 +38,14 @@ Library
                 base >= 4.0.0.0, base < 5.0.0.0, binary >= 0.5.0.0, cereal
                ,binary-serialise-cbor
         Exposed-modules:
-                Data.Set.TernarySet, Data.Set.StringSet, Data.Map.TernaryMap, Data.Map.StringMap,
+                Data.Map.StringMap,
+                Data.Map.StringMap.Internal,
+                Data.Set.StringSet,
                 Data.Set.StringSet.Internal,
-                Data.Set.TernarySet.Internal,
+                Data.Map.TernaryMap,
                 Data.Map.TernaryMap.Internal
+                Data.Set.TernarySet,
+                Data.Set.TernarySet.Internal
         Default-Language: Haskell2010
 
 Test-suite spec
