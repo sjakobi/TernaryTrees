@@ -309,17 +309,17 @@ instance Serialise a => Serialise (StringMap a) where
   decode = do
     let failBadTag tag len =
           fail ("unknown tag " ++ show tag ++ " for list of length " ++ show len)
-    n <- CBOR.decodeListLen
-    case n of
+    len <- CBOR.decodeListLen
+    case len of
       0 -> return End
       1 -> do
         ch <- CBOR.decode
         return (Node ch End End End)
-      len@2 -> do
+      2 -> do
         CBOR.decodeWordOf 8
         v <- CBOR.decode
         return (Null v End)
-      len@3 -> do
+      3 -> do
         x <- CBOR.decodeWord
         if x < 9
            then do
@@ -337,23 +337,24 @@ instance Serialise a => Serialise (StringMap a) where
                  rest <- CBOR.decode
                  return (Null v rest)
                t -> failBadTag t len
-      len@4 -> do
+      4 -> do
         x <- CBOR.decodeWord
         ch <- CBOR.decode
-        m <- CBOR.decode
-        n <- CBOR.decode
+        p <- CBOR.decode
+        q <- CBOR.decode
         case x of
-          3 -> return (Node ch End m n)
-          5 -> return (Node ch m End n)
-          6 -> return (Node ch m n End)
+          3 -> return (Node ch End p q)
+          5 -> return (Node ch p End q)
+          6 -> return (Node ch p q End)
           t -> failBadTag t len
-      len@5 -> do
+      5 -> do
         CBOR.decodeWordOf 7
         ch <- CBOR.decode
         l <- CBOR.decode
         e <- CBOR.decode
         h <- CBOR.decode
         return (Node ch l e h)
+      _ -> fail ("bad length: " ++ show len)
 
 encodeTaggedNode :: Serialise a => Word -> Char -> [StringMap a] -> CBOR.Encoding
 encodeTaggedNode tag ch ms =
