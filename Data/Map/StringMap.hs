@@ -293,67 +293,28 @@ instance Serialize.Serialize v => Serialize.Serialize (StringMap v) where
       _ -> error ("Invalid data in binary stream. tag: " ++ show tag)
 
 instance Serialise a => Serialise (StringMap a) where
-  encode (Node ch End End End) = CBOR.encodeListLen 1 <> CBOR.encode ch
-  encode (Node ch End End h) = encodeTaggedNode 1 ch [h]
-  encode (Node ch End e End) = encodeTaggedNode 2 ch [e]
-  encode (Node ch End e h) = encodeTaggedNode 3 ch [e, h]
-  encode (Node ch l End End) = encodeTaggedNode 4 ch [l]
-  encode (Node ch l End h) = encodeTaggedNode 5 ch [l, h]
-  encode (Node ch l e End) = encodeTaggedNode 6 ch [l, e]
-  encode (Node ch l e h) = encodeTaggedNode 7 ch [l, e, h]
+  encode (Node ch l e h) =
+    CBOR.encodeListLen 4 <> CBOR.encode ch <> foldMap CBOR.encode [l, e, h]
   encode (Null v End) =
-    CBOR.encodeListLen 2 <> CBOR.encodeWord 8 <> CBOR.encode v
+    CBOR.encodeListLen 1 <> CBOR.encode v
   encode (Null v rest) =
-    CBOR.encodeListLen 3 <> CBOR.encodeWord 9 <> CBOR.encode v <> CBOR.encode rest
+    CBOR.encodeListLen 2 <> CBOR.encode v <> CBOR.encode rest
   encode End = CBOR.encodeListLen 0
 
   decode = do
-    let failBadTag tag len =
-          fail ("unknown tag " ++ show tag ++ " for list of length " ++ show len)
     len <- CBOR.decodeListLen
     case len of
       0 -> return End
       1 -> do
-        ch <- CBOR.decode
-        return (Node ch End End End)
-      2 -> do
-        CBOR.decodeWordOf 8
         v <- CBOR.decode
         return (Null v End)
-      3 -> do
-        x <- CBOR.decodeWord
-        if x < 9
-           then do
-             ch <- CBOR.decode
-             m <- CBOR.decode
-             case x of
-               1 -> return (Node ch End End m)
-               2 -> return (Node ch End m End)
-               4 -> return (Node ch m End End)
-               t -> failBadTag t len
-           else do
-             case x of
-               9 -> do
-                 v <- CBOR.decode
-                 rest <- CBOR.decode
-                 return (Null v rest)
-               t -> failBadTag t len
+      2 -> do
+        v <- CBOR.decode
+        rest <- CBOR.decode
+        return (Null v rest)
       4 -> do
-        x <- CBOR.decodeWord
         ch <- CBOR.decode
-        p <- CBOR.decode
-        q <- CBOR.decode
-        case x of
-          3 -> return (Node ch End p q)
-          5 -> return (Node ch p End q)
-          6 -> return (Node ch p q End)
-          t -> failBadTag t len
-      5 -> do
-        CBOR.decodeWordOf 7
-        ch <- CBOR.decode
-        l <- CBOR.decode
-        e <- CBOR.decode
-        h <- CBOR.decode
+        [l, e, h] <- replicateM 3 CBOR.decode
         return (Node ch l e h)
       _ -> fail ("bad length: " ++ show len)
 
