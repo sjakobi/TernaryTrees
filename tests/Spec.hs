@@ -26,12 +26,20 @@ main = hspec $ do
         it "Node ch End End End" $
           serialiseIdentity (Node 'ö' End End End :: StringMap Int)
 
-
       describe "flatTermIdentity" $ do
         smallAndQuick $ \m -> flatTermIdentity (m :: StringMap Bool)
 
       describe "hasValidFlatTerm" $ do
         smallAndQuick $ \m -> hasValidFlatTerm (m :: StringMap Int)
+
+  describe "CompactStringMap" $ parallel $ do
+
+    context "binary-serialise-cbor" $ do
+      describe "serialiseIdentity" $ do
+        smallAndQuick $ \m -> serialiseIdentity (m :: CompactStringMap Int)
+      describe "flatTermIdentity" $ do
+        smallAndQuick $ \m -> flatTermIdentity (m :: CompactStringMap Bool)
+      -- no valid flat term here!
 
 smallAndQuick :: (SC.Testable IO prop, Testable prop) => prop -> SpecWith ()
 smallAndQuick testable = do
@@ -45,3 +53,9 @@ instance Serial m v => Serial m (StringMap v) where
 
 instance Arbitrary v => Arbitrary (StringMap v) where
   arbitrary = fromList <$> arbitrary
+
+instance Serial m v => Serial m (CompactStringMap v) where
+  series = CompactStringMap <$> series
+
+instance Arbitrary v => Arbitrary (CompactStringMap v) where
+  arbitrary = CompactStringMap <$> arbitrary

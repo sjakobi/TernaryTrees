@@ -13,7 +13,8 @@ module Data.Map.StringMap (
                 keys,
                 assocs,
                 elems,
-                null
+                null,
+                CompactStringMap(..)
                 ) where
 import Data.Map.StringMap.Internal
 import Data.Bits
@@ -360,3 +361,69 @@ encodeTaggedNode :: Serialise a => Word -> Char -> [StringMap a] -> CBOR.Encodin
 encodeTaggedNode tag ch ms =
     CBOR.encodeListLen listLen <> CBOR.encode tag <> CBOR.encode ch <> foldMap CBOR.encode ms
   where listLen = 2 + genericLength ms
+
+-- | Just a 'StringMap' with a non-CBOR-compliant, compact 'Serialise' instance
+newtype CompactStringMap a = CompactStringMap (StringMap a)
+  deriving (Eq, Show)
+
+instance Serialise a => Serialise (CompactStringMap a) where
+  encode (CompactStringMap m) =
+    case m of
+      Node ch End End End ->
+        CBOR.encodeSimple 0 <> CBOR.encode ch
+      Node ch End End h ->
+        compactEncodeNode 1 ch [h]
+      Node ch End e End ->
+        compactEncodeNode 2 ch [e]
+      Node ch End e h ->
+        compactEncodeNode 3 ch [e, h]
+      Node ch l End End ->
+        compactEncodeNode 4 ch [l]
+      Node ch l End h ->
+        compactEncodeNode 5 ch [l, h]
+      Node ch l e End ->
+        compactEncodeNode 6 ch [l, e]
+      Node ch l e h ->
+        compactEncodeNode 7 ch [l, e, h]
+      Null v End ->
+        CBOR.encodeSimple 8 <> CBOR.encode v
+      Null v rest ->
+        CBOR.encodeSimple 9 <> CBOR.encode v <> CBOR.encode (CompactStringMap rest)
+      End ->
+        CBOR.encodeSimple 10
+
+  decode = do
+    tag <- CBOR.decodeSimple
+    case tag of
+      _ | tag < 8 -> do
+        ch <- CBOR.decode
+        CompactStringMap l <-
+          if tag `testBit` 2
+            then CBOR.decode
+            else return compactEnd
+        CompactStringMap e <-
+          if tag `testBit` 1
+            then CBOR.decode
+            else return compactEnd
+        CompactStringMap h <-
+          if tag `testBit` 0
+            then CBOR.decode
+            else return compactEnd
+        return $ CompactStringMap (Node ch l e h)
+      8 -> do
+        v <- CBOR.decode
+        return (CompactStringMap (Null v End))
+      9 -> do
+        v <- CBOR.decode
+        CompactStringMap rest <- CBOR.decode
+        return (CompactStringMap (Null v rest))
+      10 -> return (CompactStringMap End)
+      _ -> fail ("Invalid data in binary stream. tag: " ++ show tag)
+
+compactEncodeNode :: Serialise a => Word8 -> Char -> [StringMap a] -> CBOR.Encoding
+compactEncodeNode tag ch ms = CBOR.encodeSimple tag
+                           <> CBOR.encode ch
+                           <> foldMap (CBOR.encode . CompactStringMap) ms
+
+compactEnd :: CompactStringMap a
+compactEnd = CompactStringMap End
